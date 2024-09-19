@@ -197,7 +197,7 @@ func applyTemplate(hostData []jinja2.Jinja2Opt) error {
 	if err != nil {
 		err = os.WriteFile("/etc/hosts", old_hosts, 0644)
 		if err != nil {
-			log.Fatalln("!!! HOSTS FILE MAYBE IN BROKEN STATE, failed to write backup of old hosts file. PROGRAM BROKEN")
+			log.Fatalln("!!! HOSTS FILE MAY BE IN BROKEN STATE, failed to write backup of old hosts file. PROGRAM BROKEN")
 		}
 
 		return fmt.Errorf("error writing to /etc/hosts: %w", err)
