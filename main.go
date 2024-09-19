@@ -228,7 +228,7 @@ func main() {
 
 	var err error
 
-	var spaces int
+	var ipv6_spaces int
 
 
 	// Monitor for changes in IPv6 addresses
@@ -264,17 +264,19 @@ func main() {
 			log.Println("IPv6 addresses changed, updating /etc/hosts")
 
 			// Update IPv6 list and reapply template
+
+			ipv6_spaces = 0
+			for _, ipv6 := range currentIPv6Addresses {
+				if len(ipv6) > ipv6_spaces {
+					ipv6_spaces = len(ipv6)
+				}
+			}
+			ipv6_spaces += 4
+
 			ipv6ListTemplate.Reset()
 			for _, ipv6 := range currentIPv6Addresses {
-				spaces = 0
-				for _, ipv6 := range currentIPv6Addresses {
-					if len(ipv6) > spaces {
-						spaces = len(ipv6)
-					}
-				}
-				spaces += 4
-				log.Println("spaces:", spaces)
-				ipv6ListTemplate.WriteString(fmt.Sprintf("%s%s%s %s\n", ipv6, strings.Repeat(" ", spaces-len(ipv6)), hostname, hostnameExtra))
+				log.Println("spaces:", ipv6_spaces)
+				ipv6ListTemplate.WriteString(fmt.Sprintf("%s%s%s %s\n", ipv6, strings.Repeat(" ", ipv6_spaces-len(ipv6)), hostname, hostnameExtra))
 			}
 
 			ipv4ListTemplate.Reset()
