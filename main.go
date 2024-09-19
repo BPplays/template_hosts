@@ -203,6 +203,8 @@ func applyTemplate(hostData []jinja2.Jinja2Opt) error {
 		}
 
 		return fmt.Errorf("error writing to /etc/hosts: %w", err)
+	} else {
+		log.Println("wrote hosts file")
 	}
 
 	return nil
