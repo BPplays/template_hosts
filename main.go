@@ -314,7 +314,7 @@ func test_comp() {
 
 	t1 = []string{"test", "test3"}
 	t2 = []string{"test", "test2"}
-	if equalIPv6Lists(t1, t2) == false {
+	if equalIPv6Lists(t1, t2) == true {
 		log.Fatalln("list qual not working same list item diff items test")
 	}
 }
