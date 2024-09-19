@@ -226,7 +226,6 @@ func main() {
 
 	// Monitor for changes in IPv6 addresses
 	for {
-		time.Sleep(10 * time.Second) // Poll every 10 seconds
 
 		// Get the current list of IPv6 addresses
 		currentIPv6Addresses, err = getIPv6Addresses()
@@ -281,6 +280,8 @@ func main() {
 			initialIPv6Addresses = currentIPv6Addresses
 			initialIPv4Addresses = currentIPv4Addresses
 		}
+
+		time.Sleep(10 * time.Second) // Poll every 10 seconds
 	}
 }
 
