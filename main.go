@@ -54,11 +54,12 @@ func getIPv6Addresses() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, iface := range ifaces {
-		log.Println("iface name:", iface.Name)
-		log.Println("equal iface:", (iface.Name == mainInterface))
-		log.Println("")
-	}
+
+	// for _, iface := range ifaces {
+	// 	log.Println("iface name:", iface.Name)
+	// 	log.Println("equal iface:", (iface.Name == mainInterface))
+	// 	log.Println("")
+	// }
 
 	// Iterate over the interfaces
 	for _, iface := range ifaces {
@@ -234,13 +235,16 @@ func main() {
 	// Monitor for changes in IPv6 addresses
 	for {
 
-		// Get the current list of IPv6 addresses
+		fmt.Println("getting v6 addrs")
+
 		currentIPv6Addresses, err = getIPv6Addresses()
 		if err != nil {
 			log.Printf("Error getting IPv6 addresses: %v", err)
 			continue
 		}
 
+
+		fmt.Println("getting v4 addrs")
 
 		currentIPv4Addresses, err = getIPv4Addresses()
 		if err != nil {
@@ -250,6 +254,9 @@ func main() {
 
 		// Check if there are any changes
 		if !equalIPv6Lists(initialIPv6Addresses, currentIPv6Addresses) || !equalIPv6Lists(initialIPv4Addresses, currentIPv4Addresses) {
+
+
+			fmt.Println("getting hostname")
 
 			hostname, hostnameExtra, err = getHostnameInfo()
 			if err != nil {
