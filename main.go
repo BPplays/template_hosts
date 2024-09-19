@@ -34,7 +34,7 @@ func getMainInterface() (string, error) {
 
 	scanner := bufio.NewScanner(file)
 	if scanner.Scan() {
-		return strings.TrimSpace(scanner.Text()), nil
+		return scanner.Text(), nil
 	}
 	return "", fmt.Errorf("could not read main interface")
 }
@@ -47,7 +47,7 @@ func getIPv6Addresses() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Println(mainInterface)
+	log.Println("main interface:", mainInterface)
 
 	// Get all network interfaces
 	ifaces, err := net.Interfaces()
@@ -55,7 +55,8 @@ func getIPv6Addresses() ([]string, error) {
 		return nil, err
 	}
 	for _, iface := range ifaces {
-		log.Println(iface.Name)
+		log.Println("equal iface:", (iface.Name == mainInterface))
+		log.Println("iface name:", iface.Name)
 	}
 
 	// Iterate over the interfaces
