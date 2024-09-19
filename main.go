@@ -47,12 +47,14 @@ func getIPv6Addresses() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Println(mainInterface)
 
 	// Get all network interfaces
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, err
 	}
+	log.Println(ifaces)
 
 	// Iterate over the interfaces
 	for _, iface := range ifaces {
