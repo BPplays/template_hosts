@@ -1,14 +1,14 @@
 package main
 
 import (
-	"bytes"
+	// "bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"strings"
-	"text/template"
+	// "text/template"
 	"time"
 
 	jinja2 "github.com/kluctl/go-jinja2"
@@ -37,15 +37,37 @@ func getIPv6Addresses() ([]string, error) {
 		}
 		for _, addr := range addrs {
 			ipNet, ok := addr.(*net.IPNet)
-			if !ok || ipNet.IP.To4() != nil {
+			if !ok || ipNet.IP.To4() != nil || ipNet.IP.To16() == nil {
 				continue
 			}
-			if ipNet.IP.To16() != nil {
-				ipv6Addresses = append(ipv6Addresses, ipNet.IP.String())
-			}
+			ipv6Addresses = append(ipv6Addresses, ipNet.IP.String())
 		}
 	}
 	return ipv6Addresses, nil
+}
+
+
+func getIPv4Addresses() ([]string, error) {
+	var ipv4Addresses []string
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			return nil, err
+		}
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok || ipNet.IP.To4() == nil {
+				continue
+			}
+			ipv4Addresses = append(ipv4Addresses, ipNet.IP.String())
+		}
+	}
+	return ipv4Addresses, nil
 }
 
 // Function to get the main IPv4 address
@@ -86,17 +108,23 @@ func getHostnameInfo() (string, string, error) {
 }
 
 // Function to apply the Jinja2 template and write to /etc/hosts
-func applyTemplate(hostData HostData) error {
+func applyTemplate(hostData []jinja2.Jinja2Opt) error {
 	// Load the template from /etc/hosts_template.j2
 	templateFile := "/etc/hosts_template.j2"
-	templateBytes, err := ioutil.ReadFile(templateFile)
+	templateBytes, err := os.ReadFile(templateFile)
 	if err != nil {
 		return fmt.Errorf("error reading template file: %w", err)
 	}
 
+
 	// Apply Jinja2 template
-	j := jinja2.NewJinja2()
-	result, err := j.RenderString(string(templateBytes), hostData)
+	// j, err := jinja2.NewJinja2("e", 1)
+	j, err := jinja2.NewJinja2("", 1, hostData...)
+	if err != nil {
+		return fmt.Errorf("error applying jinja2 template: %w", err)
+	}
+
+	result, err := j.RenderString(string(templateBytes))
 	if err != nil {
 		return fmt.Errorf("error applying jinja2 template: %w", err)
 	}
@@ -112,55 +140,64 @@ func applyTemplate(hostData HostData) error {
 
 // Main function to monitor and apply changes
 func main() {
-	// Fetch initial host data
-	hostMainIPv4, err := getMainIPv4()
-	if err != nil {
-		log.Fatalf("Error getting main IPv4 address: %v", err)
-	}
 
-	hostname, hostnameExtra, err := getHostnameInfo()
-	if err != nil {
-		log.Fatalf("Error getting hostname information: %v", err)
-	}
 
-	// Initial list of IPv6 addresses
 	initialIPv6Addresses, err := getIPv6Addresses()
+	if err != nil {
+		log.Fatalf("Error getting IPv6 addresses: %v", err)
+	}
+
+	initialIPv4Addresses, err := getIPv4Addresses()
 	if err != nil {
 		log.Fatalf("Error getting IPv6 addresses: %v", err)
 	}
 
 	// Prepare the template content
 	ipv6ListTemplate := ""
-	for _, ipv6 := range initialIPv6Addresses {
-		ipv6ListTemplate += fmt.Sprintf("%s %s %s\n", ipv6, hostname, hostnameExtra)
-	}
 
-	hostData := HostData{
-		MainIPv4:         hostMainIPv4,
-		Hostname:         hostname,
-		HostnameExtra:    hostnameExtra,
-		IPv6ListTemplate: ipv6ListTemplate,
-	}
 
-	// Apply the template initially
-	err = applyTemplate(hostData)
-	if err != nil {
-		log.Fatalf("Error applying template: %v", err)
-	}
+	ipv4ListTemplate := ""
+
+	// hostData := HostData{
+	// 	MainIPv4:         hostMainIPv4,
+	// 	Hostname:         hostname,
+	// 	HostnameExtra:    hostnameExtra,
+	// 	IPv6ListTemplate: ipv6ListTemplate,
+	// }
+
+	var hostData []jinja2.Jinja2Opt
+	var currentIPv6Addresses []string
+	var currentIPv4Addresses []string
+
+	var hostname string
+	var hostnameExtra string
+
 
 	// Monitor for changes in IPv6 addresses
 	for {
 		time.Sleep(10 * time.Second) // Poll every 10 seconds
 
 		// Get the current list of IPv6 addresses
-		currentIPv6Addresses, err := getIPv6Addresses()
+		currentIPv6Addresses, err = getIPv6Addresses()
+		if err != nil {
+			log.Printf("Error getting IPv6 addresses: %v", err)
+			continue
+		}
+
+
+		currentIPv4Addresses, err = getIPv4Addresses()
 		if err != nil {
 			log.Printf("Error getting IPv6 addresses: %v", err)
 			continue
 		}
 
 		// Check if there are any changes
-		if !equalIPv6Lists(initialIPv6Addresses, currentIPv6Addresses) {
+		if !equalIPv6Lists(initialIPv6Addresses, currentIPv6Addresses) || !equalIPv6Lists(initialIPv4Addresses, currentIPv4Addresses) {
+
+			hostname, hostnameExtra, err = getHostnameInfo()
+			if err != nil {
+				log.Fatalf("Error getting hostname information: %v", err)
+			}
 			log.Println("IPv6 addresses changed, updating /etc/hosts")
 
 			// Update IPv6 list and reapply template
@@ -169,7 +206,19 @@ func main() {
 				ipv6ListTemplate += fmt.Sprintf("%s %s %s\n", ipv6, hostname, hostnameExtra)
 			}
 
-			hostData.IPv6ListTemplate = ipv6ListTemplate
+			ipv4ListTemplate = ""
+			for _, ipv4 := range currentIPv4Addresses {
+				ipv4ListTemplate += fmt.Sprintf("%s %s %s\n", ipv4, hostname, hostnameExtra)
+			}
+
+
+			hostData = []jinja2.Jinja2Opt{
+				jinja2.WithGlobal("ipv6_host_replace", ipv6ListTemplate),
+				jinja2.WithGlobal("ipv4_host_replace", ipv4ListTemplate),
+				jinja2.WithGlobal("hostname_variable", hostname),
+				jinja2.WithGlobal("hostname_variable_extra", hostnameExtra),
+			}
+
 
 			err = applyTemplate(hostData)
 			if err != nil {
@@ -179,6 +228,7 @@ func main() {
 
 			// Update the initial list
 			initialIPv6Addresses = currentIPv6Addresses
+			initialIPv4Addresses = currentIPv4Addresses
 		}
 	}
 }
@@ -201,4 +251,18 @@ func equalIPv6Lists(list1, list2 []string) bool {
 	}
 
 	return true
+}
+
+func test_comp() {
+	t1 := []string{"test"}
+	t2 := []string{"test"}
+	if equalIPv6Lists(t1, t2) == false {
+		log.Fatalln("list qual not working same list test")
+	}
+
+	t1 = []string{"test", "test3"}
+	t2 = []string{"test", "test2"}
+	if equalIPv6Lists(t1, t2) == false {
+		log.Fatalln("list qual not working same list item diff items test")
+	}
 }
