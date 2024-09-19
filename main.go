@@ -200,36 +200,20 @@ func applyTemplate(hostData []jinja2.Jinja2Opt) error {
 func main() {
 	test_comp()
 
-
-	initialIPv6Addresses, err := getIPv6Addresses()
-	if err != nil {
-		log.Fatalf("Error getting IPv6 addresses: %v", err)
-	}
-
-	initialIPv4Addresses, err := getIPv4Addresses()
-	if err != nil {
-		log.Fatalf("Error getting IPv6 addresses: %v", err)
-	}
-
-	// Prepare the template content
-	ipv6ListTemplate := ""
-
-
-	ipv4ListTemplate := ""
-
-	// hostData := HostData{
-	// 	MainIPv4:         hostMainIPv4,
-	// 	Hostname:         hostname,
-	// 	HostnameExtra:    hostnameExtra,
-	// 	IPv6ListTemplate: ipv6ListTemplate,
-	// }
-
 	var hostData []jinja2.Jinja2Opt
 	var currentIPv6Addresses []string
 	var currentIPv4Addresses []string
 
+	var initialIPv6Addresses []string
+	var initialIPv4Addresses []string
+
+	var ipv6ListTemplate string
+	var ipv4ListTemplate string
+
 	var hostname string
 	var hostnameExtra string
+
+	var err error
 
 
 	// Monitor for changes in IPv6 addresses
