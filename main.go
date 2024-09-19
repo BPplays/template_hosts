@@ -191,6 +191,7 @@ func applyTemplate(hostData []jinja2.Jinja2Opt) error {
 
 // Main function to monitor and apply changes
 func main() {
+	test_comp()
 
 
 	initialIPv6Addresses, err := getIPv6Addresses()
