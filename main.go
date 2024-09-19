@@ -55,8 +55,9 @@ func getIPv6Addresses() ([]string, error) {
 		return nil, err
 	}
 	for _, iface := range ifaces {
-		log.Println("equal iface:", (iface.Name == mainInterface))
 		log.Println("iface name:", iface.Name)
+		log.Println("equal iface:", (iface.Name == mainInterface))
+		log.Println("")
 	}
 
 	// Iterate over the interfaces
