@@ -187,6 +187,8 @@ func applyTemplate(hostData []jinja2.Jinja2Opt) error {
 		return fmt.Errorf("error applying jinja2 template: %w", err)
 	}
 
+	result = "#\n#\n#\n# do not edit. this file was generated from \"/etc/hosts_template.j2\"\n#\n#\n#\n\n\n\n" + result
+
 	old_hosts, err := os.ReadFile("/etc/hosts")
 	if err != nil {
 		return fmt.Errorf("error reading from /etc/hosts: %w", err)
@@ -219,13 +221,15 @@ func main() {
 	var initialIPv6Addresses []string
 	var initialIPv4Addresses []string
 
-	var ipv6ListTemplate string
-	var ipv4ListTemplate string
+	var ipv6ListTemplate strings.Builder
+	var ipv4ListTemplate strings.Builder
 
 	var hostname string
 	var hostnameExtra string
 
 	var err error
+
+	var spaces int
 
 
 	// Monitor for changes in IPv6 addresses
@@ -261,20 +265,25 @@ func main() {
 			log.Println("IPv6 addresses changed, updating /etc/hosts")
 
 			// Update IPv6 list and reapply template
-			ipv6ListTemplate = ""
+			ipv6ListTemplate.Reset()
 			for _, ipv6 := range currentIPv6Addresses {
-				ipv6ListTemplate += fmt.Sprintf("%s    %s %s\n", ipv6, hostname, hostnameExtra)
+				for _, ipv6 := range currentIPv6Addresses {
+					if len(ipv6) > spaces {
+						spaces = len(ipv6)
+					}
+				}
+				ipv6ListTemplate.WriteString(fmt.Sprintf("%s%s%s %s\n", ipv6, strings.Repeat(" ", spaces-len(ipv6)), hostname, hostnameExtra))
 			}
 
-			ipv4ListTemplate = ""
+			ipv4ListTemplate.Reset()
 			for _, ipv4 := range currentIPv4Addresses {
-				ipv4ListTemplate += fmt.Sprintf("%s    %s %s\n", ipv4, hostname, hostnameExtra)
+				ipv4ListTemplate.WriteString(fmt.Sprintf("%s%s%s %s\n", ipv4, "    ", hostname, hostnameExtra))
 			}
 
 
 			hostData = []jinja2.Jinja2Opt{
-				jinja2.WithGlobal("ipv6_host_replace", ipv6ListTemplate),
-				jinja2.WithGlobal("ipv4_host_replace", ipv4ListTemplate),
+				jinja2.WithGlobal("ipv6_host_replace", ipv6ListTemplate.String()),
+				jinja2.WithGlobal("ipv4_host_replace", ipv4ListTemplate.String()),
 				jinja2.WithGlobal("hostname_variable", hostname),
 				jinja2.WithGlobal("hostname_variable_extra", hostnameExtra),
 			}
