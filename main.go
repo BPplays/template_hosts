@@ -276,6 +276,7 @@ func main() {
 					}
 				}
 				spaces += 4
+				log.Println("spaces:", spaces)
 				ipv6ListTemplate.WriteString(fmt.Sprintf("%s%s%s %s\n", ipv6, strings.Repeat(" ", spaces-len(ipv6)), hostname, hostnameExtra))
 			}
 
