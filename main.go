@@ -2,12 +2,14 @@ package main
 
 import (
 	// "bytes"
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"strings"
+
 	// "text/template"
 	"time"
 
@@ -23,18 +25,49 @@ type HostData struct {
 }
 
 // Function to get all IPv6 addresses of the system
+func getMainInterface() (string, error) {
+	file, err := os.Open("/etc/main_interface")
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	if scanner.Scan() {
+		return strings.TrimSpace(scanner.Text()), nil
+	}
+	return "", fmt.Errorf("could not read main interface")
+}
+
 func getIPv6Addresses() ([]string, error) {
 	var ipv6Addresses []string
+
+	// Get the main interface from /etc/main_interface
+	mainInterface, err := getMainInterface()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get all network interfaces
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, err
 	}
 
+	// Iterate over the interfaces
 	for _, iface := range ifaces {
+		// Check if the interface name matches the main interface
+		if iface.Name != mainInterface {
+			continue
+		}
+
+		// Get all addresses for the interface
 		addrs, err := iface.Addrs()
 		if err != nil {
 			return nil, err
 		}
+
+		// Filter IPv6 addresses
 		for _, addr := range addrs {
 			ipNet, ok := addr.(*net.IPNet)
 			if !ok || ipNet.IP.To4() != nil || ipNet.IP.To16() == nil {
@@ -43,30 +76,48 @@ func getIPv6Addresses() ([]string, error) {
 			ipv6Addresses = append(ipv6Addresses, ipNet.IP.String())
 		}
 	}
+
 	return ipv6Addresses, nil
 }
 
-
 func getIPv4Addresses() ([]string, error) {
 	var ipv4Addresses []string
+
+	// Get the main interface from /etc/main_interface
+	mainInterface, err := getMainInterface()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get all network interfaces
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, err
 	}
 
+	// Iterate over the interfaces
 	for _, iface := range ifaces {
+		// Check if the interface name matches the main interface
+		if iface.Name != mainInterface {
+			continue
+		}
+
+		// Get all addresses for the interface
 		addrs, err := iface.Addrs()
 		if err != nil {
 			return nil, err
 		}
+
+		// Filter IPv6 addresses
 		for _, addr := range addrs {
 			ipNet, ok := addr.(*net.IPNet)
-			if !ok || ipNet.IP.To4() == nil {
+			if !ok || ipNet.IP.To4() == nil{
 				continue
 			}
 			ipv4Addresses = append(ipv4Addresses, ipNet.IP.String())
 		}
 	}
+
 	return ipv4Addresses, nil
 }
 
