@@ -251,12 +251,12 @@ func main() {
 			// Update IPv6 list and reapply template
 			ipv6ListTemplate = ""
 			for _, ipv6 := range currentIPv6Addresses {
-				ipv6ListTemplate += fmt.Sprintf("%s %s %s\n", ipv6, hostname, hostnameExtra)
+				ipv6ListTemplate += fmt.Sprintf("%s    %s %s\n", ipv6, hostname, hostnameExtra)
 			}
 
 			ipv4ListTemplate = ""
 			for _, ipv4 := range currentIPv4Addresses {
-				ipv4ListTemplate += fmt.Sprintf("%s %s %s\n", ipv4, hostname, hostnameExtra)
+				ipv4ListTemplate += fmt.Sprintf("%s    %s %s\n", ipv4, hostname, hostnameExtra)
 			}
 
 
