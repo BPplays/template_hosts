@@ -187,9 +187,19 @@ func applyTemplate(hostData []jinja2.Jinja2Opt) error {
 		return fmt.Errorf("error applying jinja2 template: %w", err)
 	}
 
-	// Write the result to /etc/hosts
-	err = ioutil.WriteFile("/etc/hosts", []byte(result), 0644)
+	old_hosts, err := os.ReadFile("/etc/hosts")
 	if err != nil {
+		return fmt.Errorf("error reading from /etc/hosts: %w", err)
+	}
+
+	// Write the result to /etc/hosts
+	err = os.WriteFile("/etc/hosts", []byte(result), 0644)
+	if err != nil {
+		err = os.WriteFile("/etc/hosts", old_hosts, 0644)
+		if err != nil {
+			log.Fatalln("!!! HOSTS FILE MAYBE IN BROKEN STATE. PROGRAM BROKEN")
+		}
+
 		return fmt.Errorf("error writing to /etc/hosts: %w", err)
 	}
 
@@ -198,6 +208,8 @@ func applyTemplate(hostData []jinja2.Jinja2Opt) error {
 
 // Main function to monitor and apply changes
 func main() {
+	log.SetFlags(0)
+
 	test_comp()
 
 	var hostData []jinja2.Jinja2Opt
