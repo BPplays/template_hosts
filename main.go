@@ -70,7 +70,7 @@ func getIPv6Addresses() ([]string, error) {
 		// Filter IPv6 addresses
 		for _, addr := range addrs {
 			ipNet, ok := addr.(*net.IPNet)
-			if !ok || ipNet.IP.To4() != nil || ipNet.IP.To16() == nil {
+			if !ok || ipNet.IP.To4() != nil || ipNet.IP.To16() == nil || ipNet.IP.IsLoopback() {
 				continue
 			}
 			ipv6Addresses = append(ipv6Addresses, ipNet.IP.String())
@@ -111,7 +111,7 @@ func getIPv4Addresses() ([]string, error) {
 		// Filter IPv6 addresses
 		for _, addr := range addrs {
 			ipNet, ok := addr.(*net.IPNet)
-			if !ok || ipNet.IP.To4() == nil{
+			if !ok || ipNet.IP.To4() == nil || ipNet.IP.IsLoopback() {
 				continue
 			}
 			ipv4Addresses = append(ipv4Addresses, ipNet.IP.String())
