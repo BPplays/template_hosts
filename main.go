@@ -304,6 +304,7 @@ func main() {
 			initialIPv4Addresses = currentIPv4Addresses
 		}
 
+		log.Println("done with loop")
 		time.Sleep(10 * time.Second) // Poll every 10 seconds
 	}
 }
