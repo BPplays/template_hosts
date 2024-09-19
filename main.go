@@ -1,16 +1,13 @@
 package main
 
 import (
-	// "bytes"
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"strings"
 
-	// "text/template"
 	"time"
 
 	jinja2 "github.com/kluctl/go-jinja2"
