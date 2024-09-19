@@ -305,7 +305,7 @@ func main() {
 		}
 
 		log.Println("done with loop")
-		time.Sleep(10 * time.Second) // Poll every 10 seconds
+		time.Sleep(150 * time.Second) // Poll every 10 seconds
 	}
 }
 
