@@ -291,8 +291,8 @@ func main() {
 				))
 			}
 
-			log.Println(sb6.String())
-			log.Println(sb4.String())
+			log.Println("sb6:", sb6.String())
+			log.Println("sb4:", sb4.String())
 
 			data := HostData{
 				IPv6HostReplace:       sb6.String(),
