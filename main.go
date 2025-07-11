@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	templateLocation = ""
+	templateLocation = "/etc/hosts.tmpl"
 )
 
 // Struct to hold host data for templating
