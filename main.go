@@ -10,38 +10,71 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"io"
 
 	"github.com/Masterminds/sprig/v3"
+	hostsfile "github.com/kevinburke/hostsfile/lib"
+)
+
+const (
+	templateLocation = ""
 )
 
 // Struct to hold host data for templating
-// Fields match template variables
 type HostData struct {
 	IPv6HostReplace       string
 	IPv4HostReplace       string
 	HostnameVariable      string
-	HostnameVariableExtra string
 }
 
-func getMainInterface() (string, error) {
-	file, err := os.Open("/etc/main_interface")
+func validateHosts(hosts string) (error) {
+	var writer io.Writer = io.Discard
+
+	hostsdec, err := hostsfile.Decode(strings.NewReader(hosts))
 	if err != nil {
-		return "", err
+		return err
+	}
+
+	err = hostsfile.Encode(writer, hostsdec)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+// Reads /etc/main_interfaces and returns a slice of interface names
+func getMainInterfaces() ([]string, error) {
+	file, err := os.Open("/etc/main_interfaces")
+	if err != nil {
+		return nil, err
 	}
 	defer file.Close()
 
+	var ifaces []string
 	scanner := bufio.NewScanner(file)
-	if scanner.Scan() {
-		return scanner.Text(), nil
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			ifaces = append(ifaces, line)
+		}
 	}
-	return "", fmt.Errorf("could not read main interface")
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return ifaces, nil
 }
 
 func getIPv6Addresses() ([]string, error) {
 	var ipv6Addresses []string
-	mainInterface, err := getMainInterface()
+	mainIfaces, err := getMainInterfaces()
 	if err != nil {
 		return nil, err
+	}
+	ifaceSet := make(map[string]bool)
+	for _, name := range mainIfaces {
+		ifaceSet[name] = true
 	}
 
 	ifaces, err := net.Interfaces()
@@ -50,7 +83,7 @@ func getIPv6Addresses() ([]string, error) {
 	}
 
 	for _, iface := range ifaces {
-		if iface.Name != mainInterface {
+		if !ifaceSet[iface.Name] {
 			continue
 		}
 		addrs, err := iface.Addrs()
@@ -71,9 +104,13 @@ func getIPv6Addresses() ([]string, error) {
 
 func getIPv4Addresses() ([]string, error) {
 	var ipv4Addresses []string
-	mainInterface, err := getMainInterface()
+	mainIfaces, err := getMainInterfaces()
 	if err != nil {
 		return nil, err
+	}
+	ifaceSet := make(map[string]bool)
+	for _, name := range mainIfaces {
+		ifaceSet[name] = true
 	}
 
 	ifaces, err := net.Interfaces()
@@ -82,7 +119,7 @@ func getIPv4Addresses() ([]string, error) {
 	}
 
 	for _, iface := range ifaces {
-		if iface.Name != mainInterface {
+		if !ifaceSet[iface.Name] {
 			continue
 		}
 		addrs, err := iface.Addrs()
@@ -101,52 +138,65 @@ func getIPv4Addresses() ([]string, error) {
 	return ipv4Addresses, nil
 }
 
-func getHostnameInfo() (string, string, error) {
+func getHostnameInfo() (hostnames []string, err error) {
 	hostname, err := os.Hostname()
 	if err != nil {
-		return "", "", err
+		return []string{}, err
 	}
+	hostnames = append(hostnames, hostname)
+
 	parts := strings.Split(hostname, ".")
 	if len(parts) > 0 {
-		return hostname, parts[0], nil
+		hostnames = append(hostnames, parts[0])
 	}
-	return hostname, hostname, nil
+	return hostnames, nil
 }
 
 // applyTemplate uses Go text/template with Sprig funcs
 func applyTemplate(data HostData) error {
-	// read template file
-	tmplBytes, err := os.ReadFile("/etc/hosts_template.j2")
+	tmplBytes, err := os.ReadFile(templateLocation)
 	if err != nil {
 		return fmt.Errorf("error reading template file: %w", err)
 	}
 
-	// create and parse template
 	tmpl, err := template.New("hosts").Funcs(sprig.FuncMap()).Parse(string(tmplBytes))
 	if err != nil {
 		return fmt.Errorf("error parsing template: %w", err)
 	}
 
-	// execute into buffer
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return fmt.Errorf("error executing template: %w", err)
 	}
 
-	result := "#\n#\n#\n# do not edit. this file was generated from \"/etc/hosts_template.j2\"\n#\n#\n#\n\n\n\n" + buf.String()
+	result := fmt.Sprintf(
+		"#\n#\n#\n# do not edit. this file was generated from %q\n#\n#\n#\n\n\n\n",
+		templateLocation,
+	) +
+	buf.String()
 
-	// backup old hosts
 	oldHosts, err := os.ReadFile("/etc/hosts")
 	if err != nil {
 		return fmt.Errorf("error reading /etc/hosts: %w", err)
 	}
 
-	// write new hosts
-	if err := os.WriteFile("/etc/hosts", []byte(result), 0644); err != nil {
-		// restore backup
-		err2 := os.WriteFile("/etc/hosts", oldHosts, 0644)
+	err = validateHosts(result)
+	if err != nil {
+		log.Printf("validating new hosts file failed: %v", err)
+		return err
+	}
+
+	err = os.WriteFile("/etc/hosts", []byte(result), 0644)
+
+	if err != nil {
+		var err2 error
+		for range 10 {
+			err2 = os.WriteFile("/etc/hosts", oldHosts, 0644)
+			if err2 == nil { break }
+			time.Sleep(1 * time.Second)
+		}
 		if err2 != nil {
-			log.Fatalln("!!! HOSTS FILE MAY BE IN BROKEN STATE, failed to restore old file")
+			log.Println("!!! HOSTS FILE MAY BE IN BROKEN STATE, failed to restore old file")
 		}
 		return fmt.Errorf("error writing new /etc/hosts: %w", err)
 	}
@@ -174,29 +224,41 @@ func equalLists(a, b []string) bool {
 func main() {
 	log.SetFlags(0)
 
-	var initialV6, initialV4 []string
+	var prevV6, prevV4, prevHostnames []string
 
 	for {
 		v6Addrs, err := getIPv6Addresses()
 		if err != nil {
-			log.Printf("Error getting IPv6 addresses: %v", err)
+			log.Printf("Error getting IPv6 addresses: %v\n", err)
+			time.Sleep(5 * time.Second)
 			continue
 		}
 
 		v4Addrs, err := getIPv4Addresses()
 		if err != nil {
-			log.Printf("Error getting IPv4 addresses: %v", err)
+			log.Printf("Error getting IPv4 addresses: %v\n", err)
+			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		if !equalLists(initialV6, v6Addrs) || !equalLists(initialV4, v4Addrs) {
-			hostname, hostnameExtra, err := getHostnameInfo()
-			if err != nil {
-				log.Fatalf("Error getting hostname: %v", err)
-			}
+		hostnames, err := getHostnameInfo()
+		if err != nil {
+			log.Printf("Error getting hostname: %v\n", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
 
-			// build list templates
+		if len(hostnames) < 1 {
+			log.Println("hostname empty string")
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		if !equalLists(prevV6, v6Addrs) ||
+		!equalLists(prevV4, v4Addrs) ||
+		!equalLists(prevHostnames, hostnames) {
 			var sb6, sb4 strings.Builder
+
 			spaces := 0
 			for _, ip := range v6Addrs {
 				if len(ip) > spaces {
@@ -205,30 +267,47 @@ func main() {
 			}
 			spaces += 4
 			for _, ip := range v6Addrs {
-				sb6.WriteString(fmt.Sprintf("%s%s%s %s\n", ip, strings.Repeat(" ", spaces-len(ip)), hostname, hostnameExtra))
+				sb6.WriteString(fmt.Sprintf(
+					"%s%s%s\n",
+					ip,
+					strings.Repeat(" ", spaces-len(ip)),
+					strings.Join(hostnames, " "),
+				))
+			}
+
+
+			spaces4 := 0
+			for _, ip := range v4Addrs {
+				if len(ip) > spaces {
+					spaces4 = len(ip)
+				}
 			}
 			for _, ip := range v4Addrs {
-				sb4.WriteString(fmt.Sprintf("%s    %s %s\n", ip, hostname, hostnameExtra))
+				sb4.WriteString(fmt.Sprintf(
+					"%s%s%s\n",
+					ip,
+					strings.Repeat(" ", spaces4-len(ip)),
+					strings.Join(hostnames, " "),
+				))
 			}
 
 			data := HostData{
 				IPv6HostReplace:       sb6.String(),
 				IPv4HostReplace:       sb4.String(),
-				HostnameVariable:      hostname,
-				HostnameVariableExtra: hostnameExtra,
+				HostnameVariable:      strings.Join(hostnames, " "),
 			}
 
 			err = applyTemplate(data)
 			if err != nil {
-				log.Printf("Error applying template: %v", err)
+				log.Printf("Error applying template: %v\n", err)
 				continue
 			}
 
-			initialV6 = v6Addrs
-			initialV4 = v4Addrs
+			prevV6 = v6Addrs
+			prevV4 = v4Addrs
 		}
 
 		log.Println("slept loop")
-		time.Sleep(150 * time.Second)
+		time.Sleep(15 * time.Second)
 	}
 }
