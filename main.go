@@ -236,6 +236,7 @@ func main() {
 	var prevV6, prevV4, prevHostnames []string
 
 	for {
+		start := time.Now()
 		v6Addrs, err := getIPaddresses(isIPv6)
 		if err != nil {
 			log.Printf("Error getting IPv6 addresses: %v\n", err)
@@ -320,7 +321,8 @@ func main() {
 			prevV4 = v4Addrs
 		}
 
-		log.Println("slept loop")
+
+		fmt.Printf("loop time taken: %s\n", time.Since(start))
 		time.Sleep(15 * time.Second)
 	}
 }
