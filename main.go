@@ -14,10 +14,12 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	hostsfile "github.com/kevinburke/hostsfile/lib"
+	"github.com/vishvananda/netlink"
 )
 
 const (
 	templateLocation = "/etc/hosts.tmpl"
+	debug = false
 )
 
 // Struct to hold host data for templating
@@ -66,48 +68,31 @@ func getMainInterfaces() ([]string, error) {
 	return ifaces, nil
 }
 
-func getIPv6Addresses() ([]string, error) {
-	var ipv6Addresses []string
-	mainIfaces, err := getMainInterfaces()
-	if err != nil {
-		return nil, err
-	}
-	ifaceSet := make(map[string]bool)
-	for _, name := range mainIfaces {
-		ifaceSet[name] = true
-	}
+func getIfAltnames(iface string) ([]string, error) {
+    link, err := netlink.LinkByName(iface)
+    if err != nil {
+		return []string{}, fmt.Errorf("can't get iface: %w", err)
+    }
 
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, iface := range ifaces {
-		if !ifaceSet[iface.Name] {
-			continue
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			return nil, err
-		}
-		for _, addr := range addrs {
-			ipNet, ok := addr.(*net.IPNet)
-			if !ok || ipNet.IP.To4() != nil || ipNet.IP.To16() == nil || ipNet.IP.IsLoopback() {
-				continue
-			}
-			ipv6Addresses = append(ipv6Addresses, ipNet.IP.String())
-		}
-	}
-
-	return ipv6Addresses, nil
+	return link.Attrs().AltNames, nil
 }
 
-func getIPv4Addresses() ([]string, error) {
-	var ipv4Addresses []string
+func isIPv6(ipNet *net.IPNet) (bool) {
+	return !(ipNet.IP.To4() != nil || ipNet.IP.To16() == nil || ipNet.IP.IsLoopback())
+}
+
+func isIPv4(ipNet *net.IPNet) (bool) {
+	return !(ipNet.IP.To4() == nil || ipNet.IP.IsLoopback())
+}
+
+func getIPaddresses(validateFunc func(*net.IPNet) bool) ([]string, error) {
+	var ipAddresses []string
 	mainIfaces, err := getMainInterfaces()
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("mainifaces: %v", mainIfaces)
+
 	ifaceSet := make(map[string]bool)
 	for _, name := range mainIfaces {
 		ifaceSet[name] = true
@@ -119,23 +104,47 @@ func getIPv4Addresses() ([]string, error) {
 	}
 
 	for _, iface := range ifaces {
-		if !ifaceSet[iface.Name] {
+		ifaceNames := []string{iface.Name}
+		ifaceFound := false
+
+		altNames, err := getIfAltnames(iface.Name)
+		if err != nil {
+			log.Printf("can't get altnames: %v", err)
+		}
+
+		ifaceNames = append(ifaceNames, altNames...)
+
+		for _, ifaceName := range ifaceNames {
+			if ifaceSet[ifaceName] {
+				ifaceFound = true
+				break
+			}
+		}
+		if !ifaceFound {
+			if debug {
+				log.Printf("iface skipped: %v", iface.Name)
+			}
 			continue
 		}
+
+
 		addrs, err := iface.Addrs()
+		if debug {
+			log.Printf("iface new addr: %v", addrs)
+		}
 		if err != nil {
 			return nil, err
 		}
 		for _, addr := range addrs {
 			ipNet, ok := addr.(*net.IPNet)
-			if !ok || ipNet.IP.To4() == nil || ipNet.IP.IsLoopback() {
+			if !ok || !validateFunc(ipNet) {
 				continue
 			}
-			ipv4Addresses = append(ipv4Addresses, ipNet.IP.String())
+			ipAddresses = append(ipAddresses, ipNet.IP.String())
 		}
 	}
 
-	return ipv4Addresses, nil
+	return ipAddresses, nil
 }
 
 func getHostnameInfo() (hostnames []string, err error) {
@@ -227,14 +236,14 @@ func main() {
 	var prevV6, prevV4, prevHostnames []string
 
 	for {
-		v6Addrs, err := getIPv6Addresses()
+		v6Addrs, err := getIPaddresses(isIPv6)
 		if err != nil {
 			log.Printf("Error getting IPv6 addresses: %v\n", err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		v4Addrs, err := getIPv4Addresses()
+		v4Addrs, err := getIPaddresses(isIPv4)
 		if err != nil {
 			log.Printf("Error getting IPv4 addresses: %v\n", err)
 			time.Sleep(5 * time.Second)
@@ -291,6 +300,7 @@ func main() {
 				))
 			}
 
+			log.Println("6 addrs:", v6Addrs)
 			log.Println("sb6:", sb6.String())
 			log.Println("sb4:", sb4.String())
 
