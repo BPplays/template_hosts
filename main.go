@@ -2,15 +2,22 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"runtime"
 	"strings"
 
 	"time"
 
 	jinja2 "github.com/kluctl/go-jinja2"
+)
+
+const (
+	MainIfFileLinux = "/etc/main_interface"
+	MainIfFileWin = "C:\\ProgramData\\main_interfaces"
 )
 
 // Struct to hold host data for templating
@@ -22,8 +29,8 @@ type HostData struct {
 }
 
 // Function to get all IPv6 addresses of the system
-func getMainInterface() (string, error) {
-	file, err := os.Open("/etc/main_interface")
+func getMainInterfaceFile(path string) (string, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
@@ -34,6 +41,20 @@ func getMainInterface() (string, error) {
 		return scanner.Text(), nil
 	}
 	return "", fmt.Errorf("could not read main interface")
+}
+
+func getMainInterface() (string, error) {
+	os := strings.ToLower(runtime.GOOS)
+
+	switch os {
+	case "linux":
+		return getMainInterfaceFile(MainIfFileLinux)
+
+	case "windows":
+		return getMainInterfaceFile(MainIfFileWin)
+	}
+
+	return "", errors.ErrUnsupported
 }
 
 func getIPv6Addresses() ([]string, error) {
