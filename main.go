@@ -3,14 +3,15 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha3"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
 	"strings"
 	"text/template"
 	"time"
-	"io"
 
 	"github.com/Masterminds/sprig/v3"
 	hostsfile "github.com/kevinburke/hostsfile/lib"
@@ -27,6 +28,30 @@ type HostData struct {
 	IPv6HostReplace       string
 	IPv4HostReplace       string
 	HostnameVariable      string
+}
+
+func hashFile(path string) ([]byte, error) {
+	file, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	hash, err := defHash(&file)
+
+	return *hash, nil
+}
+
+func defHash(input *[]byte) (*[]byte, error) {
+
+	hash := sha3.New512()
+	_, err := hash.Write(*input)
+	if err != nil {
+		return nil, err
+	}
+
+	sum := hash.Sum(nil)
+
+	return &sum, nil
 }
 
 func validateHosts(hosts string) (error) {
@@ -214,7 +239,7 @@ func applyTemplate(data HostData) error {
 	return nil
 }
 
-func equalLists(a, b []string) bool {
+func equalStrLists(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -234,6 +259,7 @@ func main() {
 	log.SetFlags(0)
 
 	var prevV6, prevV4, prevHostnames []string
+	var prevTmplHash []byte
 
 	for {
 		start := time.Now()
@@ -264,9 +290,17 @@ func main() {
 			continue
 		}
 
-		if !equalLists(prevV6, v6Addrs) ||
-		!equalLists(prevV4, v4Addrs) ||
-		!equalLists(prevHostnames, hostnames) {
+		tmplHash, err := hashFile(templateLocation)
+		if err != nil {
+			log.Printf("can't read hash%v\n", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		if !equalStrLists(prevV6, v6Addrs) ||
+		!equalStrLists(prevV4, v4Addrs) ||
+		!equalStrLists(prevHostnames, hostnames) ||
+		!bytes.Equal(tmplHash, prevTmplHash) {
 			var sb6, sb4 strings.Builder
 
 			spaces := 0
@@ -319,6 +353,8 @@ func main() {
 
 			prevV6 = v6Addrs
 			prevV4 = v4Addrs
+			prevHostnames = hostnames
+			prevTmplHash = tmplHash
 		}
 
 
