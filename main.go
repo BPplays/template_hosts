@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"runtime"
 	"strings"
 	"text/template"
 	"time"
@@ -19,7 +20,6 @@ import (
 )
 
 const (
-	templateLocation = "/etc/hosts.tmpl"
 	debug = false
 )
 
@@ -54,6 +54,38 @@ func defHash(input *[]byte) (*[]byte, error) {
 	return &sum, nil
 }
 
+func getTemplateLocation() (string) {
+	switch strings.ToLower(runtime.GOOS) {
+	case "linux":
+		return "/etc/hosts.tmpl"
+
+	case "windows":
+		return "C:\\Windows\\System32\\drivers\\etc\\hosts.tmpl"
+
+	case "freebsd":
+		return "/usr/local/etc/hosts.tmpl"
+
+	default:
+		return "/etc/hosts.tmpl"
+	}
+}
+
+func getMainIfLocation() (string) {
+	switch strings.ToLower(runtime.GOOS) {
+	case "linux":
+		return "/etc/main_interfaces"
+
+	case "windows":
+		return "C:\\ProgramData\\main_interfaces"
+
+	case "freebsd":
+		return "/usr/local/etc/main_interfaces"
+
+	default:
+		return "/etc/main_interfaces"
+	}
+}
+
 func validateHosts(hosts string) (error) {
 	var writer io.Writer = io.Discard
 
@@ -73,7 +105,9 @@ func validateHosts(hosts string) (error) {
 
 // Reads /etc/main_interfaces and returns a slice of interface names
 func getMainInterfaces() ([]string, error) {
-	file, err := os.Open("/etc/main_interfaces")
+
+
+	file, err := os.Open(getMainIfLocation())
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +222,7 @@ func getHostnameInfo() (hostnames []string, err error) {
 
 // applyTemplate uses Go text/template with Sprig funcs
 func applyTemplate(data HostData) error {
-	tmplBytes, err := os.ReadFile(templateLocation)
+	tmplBytes, err := os.ReadFile(getTemplateLocation())
 	if err != nil {
 		return fmt.Errorf("error reading template file: %w", err)
 	}
@@ -205,7 +239,7 @@ func applyTemplate(data HostData) error {
 
 	result := fmt.Sprintf(
 		"#\n#\n#\n# do not edit. this file was generated from %q\n#\n#\n#\n\n\n\n",
-		templateLocation,
+		getTemplateLocation(),
 	) +
 	buf.String()
 
@@ -290,9 +324,9 @@ func main() {
 			continue
 		}
 
-		tmplHash, err := hashFile(templateLocation)
+		tmplHash, err := hashFile(getTemplateLocation())
 		if err != nil {
-			log.Printf("can't read hash%v\n", err)
+			log.Printf("Can't read hash, error: %v\n", err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
