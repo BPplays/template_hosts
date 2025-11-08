@@ -59,7 +59,7 @@ func TestSprintTime(t *testing.T) {
 	t.Run("hostname info", func(t *testing.T) {
 		t.Parallel()
 		hn := "test.1.2.3.4"
-		hns := getHostnameSpits(hn)
+		hns := getHostnameSplits(hn)
 		if !slices.Equal(hns, []string{"test", "test.1", "test.1.2", "test.1.2.3"}) {
 			t.Fatal(hns)
 
