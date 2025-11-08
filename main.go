@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/netip"
 	"os"
 	"runtime"
 	"strings"
@@ -128,23 +129,75 @@ func getMainInterfaces() ([]string, error) {
 }
 
 func getIfAltnames(iface string) ([]string, error) {
-    link, err := netlink.LinkByName(iface)
-    if err != nil {
+	link, err := netlink.LinkByName(iface)
+	if err != nil {
 		return []string{}, fmt.Errorf("can't get iface: %w", err)
-    }
+	}
 
 	return link.Attrs().AltNames, nil
 }
 
-func isIPv6(ipNet *net.IPNet) (bool) {
-	return !(ipNet.IP.To4() != nil || ipNet.IP.To16() == nil || ipNet.IP.IsLoopback())
+func tryIPToNetip(ip net.IP) (addr netip.Addr, ok bool) {
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+	ok = true
+
+	addr, ok = netip.AddrFromSlice(ip)
+	if !ok {
+		return netip.Addr{}, false
+	}
+
+	if addr.Is4In6() {
+		addr = netip.AddrFrom4(addr.As4())
+	}
+
+	return addr, ok
 }
 
-func isIPv4(ipNet *net.IPNet) (bool) {
-	return !(ipNet.IP.To4() == nil || ipNet.IP.IsLoopback())
+func isIPv6(ipNet *netip.Addr) (bool) {
+	switch {
+	case ipNet.Is4():
+		return false
+	case !ipNet.Is6():
+		return false
+	case ipNet.IsLoopback():
+		return false
+	case ipNet.IsLinkLocalUnicast():
+		return false
+	case ipNet.IsLinkLocalMulticast():
+		return false
+	case ipNet.IsUnspecified():
+		return false
+	case !ipNet.IsValid():
+		return false
+	}
+	return true
 }
 
-func getIPaddresses(validateFunc func(*net.IPNet) bool) ([]string, error) {
+func isIPv4(ipNet *netip.Addr) (bool) {
+	switch {
+	case !ipNet.Is4():
+		return false
+	case ipNet.Is6():
+		return false
+	case ipNet.IsLoopback():
+		return false
+	case ipNet.IsLinkLocalUnicast():
+		return false
+	case ipNet.IsLinkLocalMulticast():
+		return false
+	case ipNet.IsUnspecified():
+		return false
+	case !ipNet.IsValid():
+		return false
+	}
+	return true
+}
+
+func getIPaddresses(validateFunc func(*netip.Addr) bool) ([]string, error) {
 	var ipAddresses []string
 	mainIfaces, err := getMainInterfaces()
 	if err != nil {
@@ -195,8 +248,12 @@ func getIPaddresses(validateFunc func(*net.IPNet) bool) ([]string, error) {
 			return nil, err
 		}
 		for _, addr := range addrs {
+
 			ipNet, ok := addr.(*net.IPNet)
-			if !ok || !validateFunc(ipNet) {
+			if !ok { continue }
+			prefix, ok := tryIPToNetip((*ipNet).IP)
+			if !ok { continue }
+			if !validateFunc(&prefix) {
 				continue
 			}
 			ipAddresses = append(ipAddresses, ipNet.IP.String())
