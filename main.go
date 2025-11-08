@@ -263,17 +263,28 @@ func getIPaddresses(validateFunc func(*netip.Addr) bool) ([]string, error) {
 	return ipAddresses, nil
 }
 
+// splits a hostname by . and outputs a slice of combined one except the original
+func getHostnameSpits(s string) (hostnames []string) {
+	parts := strings.Split(s, ".")
+	for i := range len(parts)-1 {
+		tmp := []string{}
+		for i2 := range i+1 {
+			tmp = append(tmp, parts[i2])
+		}
+		hostnames = append(hostnames, strings.Join(tmp, "."))
+	}
+	return
+}
+
 func getHostnameInfo() (hostnames []string, err error) {
 	hostname, err := os.Hostname()
 	if err != nil {
-		return []string{}, err
+		return []string{"hostnamefallback.fallbackfakedomain"}, err
 	}
 	hostnames = append(hostnames, hostname)
 
-	parts := strings.Split(hostname, ".")
-	if len(parts) > 0 {
-		hostnames = append(hostnames, parts[0])
-	}
+	hostnames = append(hostnames, getHostnameSpits(hostname)...)
+
 	return hostnames, nil
 }
 

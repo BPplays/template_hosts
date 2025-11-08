@@ -3,6 +3,7 @@ package main
 import (
 	// "log"
 	"net/netip"
+	"slices"
 	"testing"
 )
 
@@ -53,6 +54,17 @@ func TestSprintTime(t *testing.T) {
 		if !isIPv4(&rfc1918) {
 			t.Fail()
 		}
+	})
+
+	t.Run("hostname info", func(t *testing.T) {
+		t.Parallel()
+		hn := "test.1.2.3.4"
+		hns := getHostnameSpits(hn)
+		if !slices.Equal(hns, []string{"test", "test.1", "test.1.2", "test.1.2.3"}) {
+			t.Fatal(hns)
+
+		}
+
 	})
 
 
