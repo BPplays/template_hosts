@@ -2,6 +2,7 @@ package main
 
 import (
 	// "log"
+	"fmt"
 	"net/netip"
 	"slices"
 	"testing"
@@ -79,6 +80,29 @@ func TestSprintTime(t *testing.T) {
 	})
 
 
+
+
+	t.Run("sort test", func(t *testing.T) {
+		t.Parallel()
+		var files_base []string = []string{
+			"/sub1/test.tmpl",
+			"/sub2/sub1/20test.tmpl",
+			"/sub2/sub1/30test.tmpl",
+			"/sub2/sub2/test.tmpl",
+			"/sub3/sub1/test.tmpl",
+			"/にほん4/sub1/test.tmpl",
+			"/日本5/sub1/test.tmpl",
+		}
+
+		files := slices.Clone(files_base)
+		sortTemplateFiles(&files)
+		fmt.Println(files)
+		if !slices.Equal(files, files_base) {
+			t.Fatal(files)
+
+		}
+
+	})
 
 
 }

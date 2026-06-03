@@ -10,7 +10,9 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"text/template"
 	"time"
@@ -21,7 +23,7 @@ import (
 )
 
 const (
-	debug = false
+	debug           = false
 )
 
 // Struct to hold host data for templating
@@ -29,46 +31,6 @@ type HostData struct {
 	IPv6HostReplace       string
 	IPv4HostReplace       string
 	HostnameVariable      string
-}
-
-func hashFile(path string) ([]byte, error) {
-	file, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	hash, err := defHash(&file)
-
-	return *hash, nil
-}
-
-func defHash(input *[]byte) (*[]byte, error) {
-
-	hash := sha3.New512()
-	_, err := hash.Write(*input)
-	if err != nil {
-		return nil, err
-	}
-
-	sum := hash.Sum(nil)
-
-	return &sum, nil
-}
-
-func getTemplateLocation() (string) {
-	switch strings.ToLower(runtime.GOOS) {
-	case "linux":
-		return "/etc/hosts.tmpl"
-
-	case "windows":
-		return "C:\\Windows\\System32\\drivers\\etc\\hosts.tmpl"
-
-	case "freebsd":
-		return "/usr/local/etc/hosts.tmpl"
-
-	default:
-		return "/etc/hosts.tmpl"
-	}
 }
 
 func getMainIfLocation() (string) {
@@ -85,6 +47,139 @@ func getMainIfLocation() (string) {
 	default:
 		return "/etc/main_interfaces"
 	}
+}
+
+func getTemplateDirLocation() (string) {
+	switch strings.ToLower(runtime.GOOS) {
+	case "linux":
+		return "/etc/hosts_templates"
+
+	case "windows":
+		// return "C:\\ProgramData\\templates"
+		return "C:\\Windows\\System32\\drivers\\etc\\hosts_templates"
+
+	case "freebsd":
+		return "/usr/local/etc/hosts_templates"
+
+	default:
+		return "/etc/hosts_templates"
+	}
+}
+
+func getHostsLocation() (string) {
+	switch strings.ToLower(runtime.GOOS) {
+	case "linux":
+		return "/etc/hosts"
+
+	case "windows":
+		return "C:\\Windows\\System32\\drivers\\etc\\hosts"
+
+	case "freebsd":
+		return "/etc/hosts"
+
+	default:
+		return "/etc/hosts"
+	}
+}
+
+func sortTemplateFiles(strs *[]string) () {
+	slices.Sort(*strs)
+}
+
+func getTemplateFiles() ([]string, error) {
+	dir := getTemplateDirLocation()
+	var files []string
+
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(strings.ToLower(d.Name()), ".tmpl") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error reading template dir %q: %w", dir, err)
+	}
+
+	sortTemplateFiles(&files)
+	return files, nil
+}
+
+func hashFiles(files []string) ([]byte, error) {
+	hash := sha3.New512()
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("error reading %q for hashing: %w", file, err)
+		}
+		hash.Write(data)
+	}
+	return hash.Sum(nil), nil
+}
+
+func applyTemplate(data HostData) error {
+	tmplFiles, err := getTemplateFiles()
+	if err != nil {
+		return fmt.Errorf("error getting template files: %w", err)
+	}
+
+	var fullTmpl strings.Builder
+	for _, file := range tmplFiles {
+		tmplBytes, readErr := os.ReadFile(file)
+		if readErr != nil {
+			return fmt.Errorf("error reading template file %q: %w", file, readErr)
+		}
+		fullTmpl.WriteString("\n")
+		fullTmpl.Write(tmplBytes)
+	}
+
+	tmpl, err := template.New("hosts").Funcs(sprig.FuncMap()).Parse(fullTmpl.String())
+	if err != nil {
+		return fmt.Errorf("error parsing template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return fmt.Errorf("error executing template: %w", err)
+	}
+
+	result := fmt.Sprintf(
+		"#\n#\n#\n# do not edit. this file was generated from %q\n#\n#\n#\n\n\n\n",
+		getTemplateDirLocation(),
+	) +
+	buf.String()
+
+	hostsFile := getHostsLocation()
+	oldHosts, err := os.ReadFile(hostsFile)
+	if err != nil {
+		return fmt.Errorf("error reading hosts file %q: %w", hostsFile, err)
+	}
+
+	err = validateHosts(result)
+	if err != nil {
+		log.Printf("validating new hosts file failed: %v", err)
+		return err
+	}
+
+	err = os.WriteFile(hostsFile, []byte(result), 0644)
+
+	if err != nil {
+		var err2 error
+		for range 10 {
+			err2 = os.WriteFile(hostsFile, oldHosts, 0644)
+			if err2 == nil { break }
+			time.Sleep(1 * time.Second)
+		}
+		if err2 != nil {
+			log.Println("!!! HOSTS FILE MAY BE IN BROKEN STATE, failed to restore old file")
+		}
+		return fmt.Errorf("error writing new hosts file %q: %w", hostsFile, err)
+	}
+
+	log.Println("wrote hosts file")
+	return nil
 }
 
 func validateHosts(hosts string) (error) {
@@ -289,59 +384,6 @@ func getHostnameInfo() (hostnames []string, err error) {
 	return hostnames, nil
 }
 
-// applyTemplate uses Go text/template with Sprig funcs
-func applyTemplate(data HostData) error {
-	tmplBytes, err := os.ReadFile(getTemplateLocation())
-	if err != nil {
-		return fmt.Errorf("error reading template file: %w", err)
-	}
-
-	tmpl, err := template.New("hosts").Funcs(sprig.FuncMap()).Parse(string(tmplBytes))
-	if err != nil {
-		return fmt.Errorf("error parsing template: %w", err)
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return fmt.Errorf("error executing template: %w", err)
-	}
-
-	result := fmt.Sprintf(
-		"#\n#\n#\n# do not edit. this file was generated from %q\n#\n#\n#\n\n\n\n",
-		getTemplateLocation(),
-	) +
-	buf.String()
-
-	oldHosts, err := os.ReadFile("/etc/hosts")
-	if err != nil {
-		return fmt.Errorf("error reading /etc/hosts: %w", err)
-	}
-
-	err = validateHosts(result)
-	if err != nil {
-		log.Printf("validating new hosts file failed: %v", err)
-		return err
-	}
-
-	err = os.WriteFile("/etc/hosts", []byte(result), 0644)
-
-	if err != nil {
-		var err2 error
-		for range 10 {
-			err2 = os.WriteFile("/etc/hosts", oldHosts, 0644)
-			if err2 == nil { break }
-			time.Sleep(1 * time.Second)
-		}
-		if err2 != nil {
-			log.Println("!!! HOSTS FILE MAY BE IN BROKEN STATE, failed to restore old file")
-		}
-		return fmt.Errorf("error writing new /etc/hosts: %w", err)
-	}
-
-	log.Println("wrote hosts file")
-	return nil
-}
-
 func equalStrLists(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -393,7 +435,13 @@ func main() {
 			continue
 		}
 
-		tmplHash, err := hashFile(getTemplateLocation())
+		tmplFilesForHash, hashErr := getTemplateFiles()
+		if hashErr != nil {
+			log.Printf("Can't get template files, error: %v\n", hashErr)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		tmplHash, err := hashFiles(tmplFilesForHash)
 		if err != nil {
 			log.Printf("Can't read hash, error: %v\n", err)
 			time.Sleep(5 * time.Second)
