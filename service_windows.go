@@ -12,43 +12,42 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-/*
-	========================
-	Kernel32 bindings
-	========================
-*/
-
 var (
-	kernel32 = windows.NewLazySystemDLL("kernel32.dll")
+	ntdll = windows.NewLazySystemDLL("ntdll.dll")
 
-	procSetInformationProcess = kernel32.NewProc("SetInformationProcess")
+	procNtSetInformationProcess = ntdll.NewProc("NtSetInformationProcess")
 )
 
 /*
 	========================
 	Process Information Classes
+	(from Windows internals)
 	========================
 */
 
 const (
-	ProcessMemoryPriority    = 33
-	ProcessIoPriority        = 33
-	ProcessPowerThrottling   = 4
+	ProcessMemoryPriority = 39
+	ProcessIoPriority     = 33
+	ProcessPowerThrottling = 4
 )
 
 /*
 	========================
-	IO priority constants
+	IO Priority
 	========================
 */
 
+type processIoPriority uint32
+
 const (
-	IoPriorityVeryLow = 0
+	IoPriorityVeryLow processIoPriority = 0
+	IoPriorityLow     processIoPriority = 1
+	IoPriorityNormal  processIoPriority = 2
 )
 
 /*
 	========================
-	Memory priority struct
+	Memory Priority
 	========================
 */
 
@@ -58,7 +57,7 @@ type memoryPriorityInformation struct {
 
 /*
 	========================
-	EcoQoS struct
+	EcoQoS / Power throttling
 	========================
 */
 
@@ -78,91 +77,75 @@ const (
 	========================
 */
 
-func setProcessPriority() error {
-	return windows.SetPriorityClass(
-		windows.CurrentProcess(),
-		windows.IDLE_PRIORITY_CLASS,
-	)
-}
-
-func setIOPriorityLow() error {
+func ntSetProcessInfo(class uint32, data unsafe.Pointer, size uintptr) error {
 	h := windows.CurrentProcess()
 
-	// Windows expects ProcessInformationClass = 33 for IO priority
-	var ioPriority uint32 = IoPriorityVeryLow
-
-	r1, _, err := procSetInformationProcess.Call(
+	r1, _, err := procNtSetInformationProcess.Call(
 		uintptr(h),
-		uintptr(ProcessIoPriority),
-		uintptr(unsafe.Pointer(&ioPriority)),
-		unsafe.Sizeof(ioPriority),
+		uintptr(class),
+		uintptr(data),
+		size,
 	)
 
-	if r1 == 0 {
-		return fmt.Errorf("SetInformationProcess(IO_PRIORITY) failed: %w", err)
-	}
-	return nil
-}
-
-func setMemoryPriorityLow() error {
-	h := windows.CurrentProcess()
-
-	info := memoryPriorityInformation{
-		MemoryPriority: 1, // lowest
-	}
-
-	r1, _, err := procSetInformationProcess.Call(
-		uintptr(h),
-		uintptr(ProcessMemoryPriority),
-		uintptr(unsafe.Pointer(&info)),
-		unsafe.Sizeof(info),
-	)
-
-	if r1 == 0 {
-		return fmt.Errorf("SetInformationProcess(MEMORY_PRIORITY) failed: %w", err)
-	}
-	return nil
-}
-
-func enableEfficiencyMode() error {
-	h := windows.CurrentProcess()
-
-	state := processPowerThrottlingState{
-		Version:     1,
-		ControlMask: POWER_THROTTLING_EXECUTION_SPEED,
-		StateMask:   POWER_THROTTLING_EXECUTION_SPEED,
-	}
-
-	r1, _, err := procSetInformationProcess.Call(
-		uintptr(h),
-		uintptr(ProcessPowerThrottling),
-		uintptr(unsafe.Pointer(&state)),
-		unsafe.Sizeof(state),
-	)
-
-	if r1 == 0 {
-		return fmt.Errorf("SetInformationProcess(POWER_THROTTLING) failed: %w", err)
+	// NTSTATUS success = 0
+	if r1 != 0 {
+		return fmt.Errorf("NtSetInformationProcess failed: %v (ntstatus=%x)", err, r1)
 	}
 	return nil
 }
 
 /*
 	========================
-	Main API
+	Features
 	========================
 */
 
+func setLowIO() error {
+	io := IoPriorityVeryLow
+	return ntSetProcessInfo(
+		ProcessIoPriority,
+		unsafe.Pointer(&io),
+		unsafe.Sizeof(io),
+	)
+}
+
+func setLowMemory() error {
+	info := memoryPriorityInformation{
+		MemoryPriority: 1,
+	}
+	return ntSetProcessInfo(
+		ProcessMemoryPriority,
+		unsafe.Pointer(&info),
+		unsafe.Sizeof(info),
+	)
+}
+
+func setEfficiencyMode() error {
+	state := processPowerThrottlingState{
+		Version:     1,
+		ControlMask: POWER_THROTTLING_EXECUTION_SPEED,
+		StateMask:   POWER_THROTTLING_EXECUTION_SPEED,
+	}
+
+	// NOTE: This one is still via NtSetInformationProcess on modern builds
+	return ntSetProcessInfo(
+		ProcessPowerThrottling,
+		unsafe.Pointer(&state),
+		unsafe.Sizeof(state),
+	)
+}
+
 func setLowestSystemImpact() error {
-	if err := setProcessPriority(); err != nil {
+	if err := windows.SetPriorityClass(windows.CurrentProcess(), windows.IDLE_PRIORITY_CLASS); err != nil {
 		return err
 	}
-	if err := setIOPriorityLow(); err != nil {
+	if err := setLowIO(); err != nil {
 		return err
 	}
-	if err := setMemoryPriorityLow(); err != nil {
+	if err := setLowMemory(); err != nil {
 		return err
 	}
-	if err := enableEfficiencyMode(); err != nil {
+	if err := setEfficiencyMode(); err != nil {
 		return err
 	}
 	return nil
