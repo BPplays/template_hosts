@@ -12,54 +12,31 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+
 var (
-	ntdll = windows.NewLazySystemDLL("ntdll.dll")
+	kernel32 = windows.NewLazySystemDLL("kernel32.dll")
 
-	procNtSetInformationProcess = ntdll.NewProc("NtSetInformationProcess")
+	procSetProcessInformation = kernel32.NewProc("SetProcessInformation")
 )
-
-/*
-	========================
-	Process Information Classes
-	(from Windows internals)
-	========================
-*/
 
 const (
-	ProcessMemoryPriority = 39
-	ProcessIoPriority     = 33
-	ProcessPowerThrottling = 4
+	// From the documented PROCESS_INFORMATION_CLASS order:
+	// ProcessMemoryPriority = 0
+	// ProcessPowerThrottling = 4
+	processMemoryPriorityClass  = 0
+	processPowerThrottlingClass = 4
 )
-
-/*
-	========================
-	IO Priority
-	========================
-*/
-
-type processIoPriority uint32
 
 const (
-	IoPriorityVeryLow processIoPriority = 0
-	IoPriorityLow     processIoPriority = 1
-	IoPriorityNormal  processIoPriority = 2
-)
+	memoryPriorityVeryLow = 1
 
-/*
-	========================
-	Memory Priority
-	========================
-*/
+	processPowerThrottlingCurrentVersion = 1
+	processPowerThrottlingExecutionSpeed  = 0x1
+)
 
 type memoryPriorityInformation struct {
 	MemoryPriority uint32
 }
-
-/*
-	========================
-	EcoQoS / Power throttling
-	========================
-*/
 
 type processPowerThrottlingState struct {
 	Version     uint32
@@ -67,85 +44,58 @@ type processPowerThrottlingState struct {
 	StateMask   uint32
 }
 
-const (
-	POWER_THROTTLING_EXECUTION_SPEED = 0x1
-)
-
-/*
-	========================
-	Helpers
-	========================
-*/
-
-func ntSetProcessInfo(class uint32, data unsafe.Pointer, size uintptr) error {
+func setProcessInformation(class uint32, info unsafe.Pointer, size uintptr) error {
 	h := windows.CurrentProcess()
 
-	r1, _, err := procNtSetInformationProcess.Call(
+	r1, _, err := procSetProcessInformation.Call(
 		uintptr(h),
 		uintptr(class),
-		uintptr(data),
+		uintptr(info),
 		size,
 	)
 
-	// NTSTATUS success = 0
-	if r1 != 0 {
-		return fmt.Errorf("NtSetInformationProcess failed: %v (ntstatus=%x)", err, r1)
+	if r1 == 0 {
+		return fmt.Errorf("SetProcessInformation failed: %w", err)
 	}
 	return nil
 }
 
-/*
-	========================
-	Features
-	========================
-*/
-
-func setLowIO() error {
-	io := IoPriorityVeryLow
-	return ntSetProcessInfo(
-		ProcessIoPriority,
-		unsafe.Pointer(&io),
-		unsafe.Sizeof(io),
-	)
+func setLowestPriorityClass() error {
+	return windows.SetPriorityClass(windows.CurrentProcess(), windows.IDLE_PRIORITY_CLASS)
 }
 
-func setLowMemory() error {
+func setLowestMemoryPriority() error {
 	info := memoryPriorityInformation{
-		MemoryPriority: 1,
+		MemoryPriority: memoryPriorityVeryLow,
 	}
-	return ntSetProcessInfo(
-		ProcessMemoryPriority,
+	return setProcessInformation(
+		processMemoryPriorityClass,
 		unsafe.Pointer(&info),
 		unsafe.Sizeof(info),
 	)
 }
 
-func setEfficiencyMode() error {
-	state := processPowerThrottlingState{
-		Version:     1,
-		ControlMask: POWER_THROTTLING_EXECUTION_SPEED,
-		StateMask:   POWER_THROTTLING_EXECUTION_SPEED,
+func enableEfficiencyMode() error {
+	info := processPowerThrottlingState{
+		Version:     processPowerThrottlingCurrentVersion,
+		ControlMask: processPowerThrottlingExecutionSpeed,
+		StateMask:   processPowerThrottlingExecutionSpeed,
 	}
-
-	// NOTE: This one is still via NtSetInformationProcess on modern builds
-	return ntSetProcessInfo(
-		ProcessPowerThrottling,
-		unsafe.Pointer(&state),
-		unsafe.Sizeof(state),
+	return setProcessInformation(
+		processPowerThrottlingClass,
+		unsafe.Pointer(&info),
+		unsafe.Sizeof(info),
 	)
 }
 
 func setLowestSystemImpact() error {
-	if err := windows.SetPriorityClass(windows.CurrentProcess(), windows.IDLE_PRIORITY_CLASS); err != nil {
+	if err := setLowestPriorityClass(); err != nil {
 		return err
 	}
-	if err := setLowIO(); err != nil {
+	if err := setLowestMemoryPriority(); err != nil {
 		return err
 	}
-	if err := setLowMemory(); err != nil {
-		return err
-	}
-	if err := setEfficiencyMode(); err != nil {
+	if err := enableEfficiencyMode(); err != nil {
 		return err
 	}
 	return nil
