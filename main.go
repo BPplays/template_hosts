@@ -36,7 +36,7 @@ type HostData struct {
 	IPv6IPs       []string
 	IPv4IPs       []string
 
-	os string
+	OS string
 }
 
 func getMainIfLocation() (string) {
