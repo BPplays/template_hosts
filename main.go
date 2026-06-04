@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/sha3"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -402,6 +403,14 @@ func equalStrLists(a, b []string) bool {
 
 func main() {
 	log.SetFlags(0)
+
+	flagSvc := flag.String("service", "", "Control the Windows service (install/uninstall/start/stop/restart).")
+	flag.Parse()
+
+	if len(*flagSvc) > 0 {
+		makeService()
+		return
+	}
 
 	var prevV6, prevV4, prevHostnames []string
 	var prevTmplHash []byte
