@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/sha3"
 	"flag"
 	"fmt"
@@ -428,21 +429,18 @@ func equalStrLists(a, b []string) bool {
 	return true
 }
 
-func main() {
+func start(ctx context.Context) {
 	log.SetFlags(0)
 
-	srvAction := flag.String("service", "", "install|uninstall|start|stop|run")
-	flag.Parse()
-
-	if *srvAction != "" {
-		makeService(srvAction)
-		return
-	}
 
 	var prevV6, prevV4, prevHostnames []string
 	var prevTmplHash []byte
 
 	for {
+		if ctx.Err() != nil {
+			return
+		}
+
 		start := time.Now()
 		v6Addrs, err := getIPaddresses(isIPv6)
 		if err != nil {
@@ -554,4 +552,18 @@ func main() {
 		fmt.Printf("loop time taken: %s\n", time.Since(start))
 		time.Sleep(15 * time.Second)
 	}
+}
+
+func main() {
+
+	srvAction := flag.String("service", "", "install|uninstall|start|stop|run")
+	flag.Parse()
+
+	if *srvAction != "" {
+		makeService(srvAction)
+		return
+	}
+
+	ctx := context.Background()
+	start(ctx)
 }

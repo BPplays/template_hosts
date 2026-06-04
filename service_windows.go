@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/kardianos/service"
@@ -31,7 +32,10 @@ func makeService(srvAction *string) error {
 	return service.Control(s, *srvAction)
 }
 
-type program struct{}
+type program struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+}
 
 func (p *program) Start(s service.Service) error {
 	// Start should not block. Do the actual work async.
@@ -43,12 +47,15 @@ func (p *program) run() {
 	if err != nil {
 		fmt.Println(err)
 	}
+	p.ctx, p.cancel = context.WithCancel(context.Background())
 
-	main()
+	start(p.ctx)
 }
 
 func (p *program) Stop(s service.Service) error {
-	// Stop should not block. Return with a few seconds.
+	if p.cancel != nil {
+		p.cancel()
+	}
 	return nil
 }
 
