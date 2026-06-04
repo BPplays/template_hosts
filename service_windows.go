@@ -17,7 +17,7 @@ func setLowestPriority() error {
 	return windows.SetPriorityClass(h, windows.IDLE_PRIORITY_CLASS)
 }
 
-func makeService(srvAction *string) error {
+func serviceAction(srvAction *string) error {
 	cfg := &service.Config{
 		Name:        "template_hosts",
 		DisplayName: "template_hosts",
@@ -64,7 +64,7 @@ func (p *program) Stop(s service.Service) error {
 
 func srvMain() error {
 	s := "main"
-	return makeService(&s)
+	return serviceAction(&s)
 
 }
 

@@ -560,7 +560,7 @@ func main() {
 	flag.Parse()
 
 	if *srvAction != "" {
-		err := makeService(srvAction)
+		err := serviceAction(srvAction)
 		if err != nil {
 			fmt.Println(err)
 		}
