@@ -404,11 +404,11 @@ func equalStrLists(a, b []string) bool {
 func main() {
 	log.SetFlags(0)
 
-	flagSvc := flag.String("service", "", "Control the Windows service (install/uninstall/start/stop/restart).")
+	srvAction := flag.String("service", "", "install|uninstall|start|stop|run")
 	flag.Parse()
 
-	if len(*flagSvc) > 0 {
-		makeService()
+	if *srvAction != "" {
+		makeService(srvAction)
 		return
 	}
 

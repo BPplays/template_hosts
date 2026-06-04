@@ -7,19 +7,19 @@ import (
 	"github.com/kardianos/service"
 )
 
-func makeService() error {
+func makeService(srvAction *string) error {
 	cfg := &service.Config{
 		Name:        "template_hosts",
 		DisplayName: "template_hosts",
 		Description: "templates the hosts file",
 	}
 
-	_, err := service.New(&program{}, cfg)
+	s, err := service.New(&program{}, cfg)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	return service.Control(s, *srvAction)
 }
 
 type program struct{}
@@ -31,7 +31,6 @@ func (p *program) Start(s service.Service) error {
 }
 func (p *program) run() {
 	main()
-	// Do work here
 }
 
 func (p *program) Stop(s service.Service) error {

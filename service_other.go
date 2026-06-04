@@ -4,6 +4,6 @@ package main
 
 import "errors"
 
-func makeService() error {
+func makeService(_ *string) error {
 	return errors.New("services are only supported on Windows")
 }
