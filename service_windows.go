@@ -17,6 +17,10 @@ var (
 	kernel32 = windows.NewLazySystemDLL("kernel32.dll")
 
 	procSetProcessInformation = kernel32.NewProc("SetProcessInformation")
+
+	ntdll = windows.NewLazySystemDLL("ntdll.dll")
+
+	procNtSetInformationProcess = ntdll.NewProc("NtSetInformationProcess")
 )
 
 const (
@@ -25,6 +29,7 @@ const (
 	// ProcessPowerThrottling = 4
 	processMemoryPriorityClass  = 0
 	processPowerThrottlingClass = 4
+	ProcessIoPriority     = 33
 )
 
 const (
@@ -42,6 +47,60 @@ type processPowerThrottlingState struct {
 	Version     uint32
 	ControlMask uint32
 	StateMask   uint32
+}
+
+/*
+	========================
+	IO Priority
+	========================
+*/
+
+type processIoPriority uint32
+
+const (
+	IoPriorityVeryLow processIoPriority = 0
+	IoPriorityLow     processIoPriority = 1
+	IoPriorityNormal  processIoPriority = 2
+)
+
+
+
+/*
+	========================
+	Helpers
+	========================
+*/
+
+func ntSetProcessInfo(class uint32, data unsafe.Pointer, size uintptr) error {
+	h := windows.CurrentProcess()
+
+	r1, _, err := procNtSetInformationProcess.Call(
+		uintptr(h),
+		uintptr(class),
+		uintptr(data),
+		size,
+	)
+
+	// NTSTATUS success = 0
+	if r1 != 0 {
+		return fmt.Errorf("NtSetInformationProcess failed: %v (ntstatus=%x)", err, r1)
+	}
+	return nil
+}
+
+/*
+	========================
+	Features
+	========================
+*/
+
+func setLowIO() error {
+	io := IoPriorityVeryLow
+	return ntSetProcessInfo(
+		ProcessIoPriority,
+		unsafe.Pointer(&io),
+		unsafe.Sizeof(io),
+	)
 }
 
 func setProcessInformation(class uint32, info unsafe.Pointer, size uintptr) error {
@@ -96,6 +155,9 @@ func setLowestSystemImpact() error {
 		return err
 	}
 	if err := enableEfficiencyMode(); err != nil {
+		return err
+	}
+	if err := setLowIO(); err != nil {
 		return err
 	}
 	return nil
