@@ -32,6 +32,9 @@ type HostData struct {
 	IPv6HostReplace       string
 	IPv4HostReplace       string
 	HostnameVariable      string
+
+	IPv6IPs       []string
+	IPv4IPs       []string
 }
 
 func getMainIfLocation() (string) {
@@ -206,6 +209,10 @@ func getMainInterfaces() ([]string, error) {
 
 	file, err := os.Open(getMainIfLocation())
 	if err != nil {
+		ifs, _ := net.Interfaces()
+		for _, i := range ifs {
+			fmt.Println("  ", i.Index, i.Name, i.HardwareAddr)
+		}
 		return nil, err
 	}
 	defer file.Close()
@@ -315,9 +322,15 @@ func getIPaddresses(validateFunc func(*netip.Addr) bool) ([]string, error) {
 		ifaceNames := []string{iface.Name}
 		ifaceFound := false
 
-		altNames, err := getIfAltnames(iface.Name)
-		if err != nil {
-			log.Printf("can't get altnames: %v", err)
+		os := strings.ToLower(runtime.GOOS)
+
+		var altNames []string
+		if os != "windows" {
+			altNames, err = getIfAltnames(iface.Name)
+			if err != nil {
+				log.Printf("can't get altnames: %v", err)
+			}
+
 		}
 
 		ifaceNames = append(ifaceNames, altNames...)
@@ -474,7 +487,7 @@ func main() {
 				sb6.WriteString(fmt.Sprintf(
 					"%s%s%s\n",
 					ip,
-					strings.Repeat(" ", spaces-len(ip)),
+					strings.Repeat(" ", max(spaces-len(ip), 1)),
 					strings.Join(hostnames, " "),
 				))
 			}
@@ -490,7 +503,7 @@ func main() {
 				sb4.WriteString(fmt.Sprintf(
 					"%s%s%s\n",
 					ip,
-					strings.Repeat(" ", spaces4-len(ip)),
+					strings.Repeat(" ", max(spaces4-len(ip), 1)),
 					strings.Join(hostnames, " "),
 				))
 			}
@@ -503,11 +516,15 @@ func main() {
 				IPv6HostReplace:       sb6.String(),
 				IPv4HostReplace:       sb4.String(),
 				HostnameVariable:      strings.Join(hostnames, " "),
+
+				IPv6IPs: v6Addrs,
+				IPv4IPs: v4Addrs,
 			}
 
 			err = applyTemplate(data)
 			if err != nil {
 				log.Printf("Error applying template: %v\n", err)
+				time.Sleep(10 * time.Second)
 				continue
 			}
 

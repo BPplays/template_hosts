@@ -3,9 +3,18 @@
 package main
 
 import (
+	"fmt"
 
 	"github.com/kardianos/service"
+
+	"golang.org/x/sys/windows"
 )
+
+func setLowestPriority() error {
+	h := windows.CurrentProcess()
+
+	return windows.SetPriorityClass(h, windows.IDLE_PRIORITY_CLASS)
+}
 
 func makeService(srvAction *string) error {
 	cfg := &service.Config{
@@ -30,6 +39,11 @@ func (p *program) Start(s service.Service) error {
 	return nil
 }
 func (p *program) run() {
+	err := setLowestPriority()
+	if err != nil {
+		fmt.Println(err)
+	}
+
 	main()
 }
 
