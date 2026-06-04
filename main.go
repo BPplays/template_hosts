@@ -36,7 +36,7 @@ type HostData struct {
 
 	IPv6IPs       []string
 	IPv4IPs       []string
-	Hostnames           []string
+	Hostnames     []string
 
 	OS string
 }
