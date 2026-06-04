@@ -35,6 +35,8 @@ type HostData struct {
 
 	IPv6IPs       []string
 	IPv4IPs       []string
+
+	os string
 }
 
 func getMainIfLocation() (string) {
@@ -84,6 +86,17 @@ func getHostsLocation() (string) {
 	default:
 		return "/etc/hosts"
 	}
+}
+
+func indent(text string, spaces int) string {
+	prefix := strings.Repeat(" ", spaces)
+
+	lines := strings.Split(text, "\n")
+	for i := range lines {
+		lines[i] = prefix + lines[i]
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func sortTemplateFiles(strs *[]string) () {
@@ -164,6 +177,7 @@ func applyTemplate(data HostData) error {
 	err = validateHosts(result)
 	if err != nil {
 		log.Printf("validating new hosts file failed: %v", err)
+		fmt.Println(indent(result, 4))
 		return err
 	}
 
@@ -519,6 +533,8 @@ func main() {
 
 				IPv6IPs: v6Addrs,
 				IPv4IPs: v4Addrs,
+
+				os: strings.ToLower(runtime.GOOS),
 			}
 
 			err = applyTemplate(data)
