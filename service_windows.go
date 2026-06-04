@@ -29,6 +29,9 @@ func makeService(srvAction *string) error {
 		return err
 	}
 
+	if *srvAction == "main" {
+		return s.Run()
+	}
 	return service.Control(s, *srvAction)
 }
 
@@ -39,6 +42,7 @@ type program struct {
 
 func (p *program) Start(s service.Service) error {
 	// Start should not block. Do the actual work async.
+	p.ctx, p.cancel = context.WithCancel(context.Background())
 	go p.run()
 	return nil
 }
@@ -47,7 +51,6 @@ func (p *program) run() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	p.ctx, p.cancel = context.WithCancel(context.Background())
 
 	start(p.ctx)
 }
@@ -57,5 +60,11 @@ func (p *program) Stop(s service.Service) error {
 		p.cancel()
 	}
 	return nil
+}
+
+func srvMain() error {
+	s := "main"
+	return makeService(&s)
+
 }
 

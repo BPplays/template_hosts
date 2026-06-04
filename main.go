@@ -569,5 +569,14 @@ func main() {
 	}
 
 	ctx := context.Background()
-	start(ctx)
+	if strings.ToLower(runtime.GOOS) == "windows" {
+		err := srvMain()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+	} else {
+		start(ctx)
+	}
 }
