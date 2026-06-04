@@ -36,6 +36,7 @@ type HostData struct {
 
 	IPv6IPs       []string
 	IPv4IPs       []string
+	Hostnames           []string
 
 	OS string
 }
@@ -531,6 +532,7 @@ func start(ctx context.Context) {
 
 				IPv6IPs: v6Addrs,
 				IPv4IPs: v4Addrs,
+				Hostnames:      hostnames,
 
 				OS: strings.ToLower(runtime.GOOS),
 			}

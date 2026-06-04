@@ -168,6 +168,11 @@ func serviceAction(srvAction *string) error {
 		Name:        "template_hosts",
 		DisplayName: "template_hosts",
 		Description: "templates the hosts file",
+		Option: service.KeyValue{
+			"OnFailure":             "restart",
+			"OnFailureDelayDuration": "1s",
+			"OnFailureResetPeriod":   10,
+		},
 	}
 
 	s, err := service.New(&program{}, cfg)
