@@ -534,7 +534,7 @@ func main() {
 				IPv6IPs: v6Addrs,
 				IPv4IPs: v4Addrs,
 
-				os: strings.ToLower(runtime.GOOS),
+				OS: strings.ToLower(runtime.GOOS),
 			}
 
 			err = applyTemplate(data)
