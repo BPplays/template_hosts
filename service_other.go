@@ -8,6 +8,6 @@ func makeService(_ *string) error {
 	return errors.New("services are only supported on Windows")
 }
 
-func run() error {
+func srvMain() error {
 	return errors.New("services are only supported on Windows")
 }
