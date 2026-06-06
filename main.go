@@ -442,7 +442,7 @@ func getHostnameInfo() (hostnames []string, err error) {
 	if strings.ToLower(runtime.GOOS) == "windows" {
 		domains, err := getTCPIPDomain()
 		if err != nil {
-			fmt.Println()
+			fmt.Println("can't get domains")
 		}
 		if len(domains) > 0 {
 			hostnames = addDomainToHostnames(hostnames, domains)
