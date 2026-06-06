@@ -59,6 +59,22 @@ func getMainIfLocation() (string) {
 	}
 }
 
+func getAlternateHostnamesLocation() (string) {
+	switch strings.ToLower(runtime.GOOS) {
+	case "linux":
+		return "/etc/alternate_hostnames"
+
+	case "windows":
+		return "C:\\ProgramData\\alternate_hostnames"
+
+	case "freebsd":
+		return "/usr/local/etc/alternate_hostnames"
+
+	default:
+		return "/etc/alternate_hostnames"
+	}
+}
+
 func getTemplateDirLocation() (string) {
 	switch strings.ToLower(runtime.GOOS) {
 	case "linux":
@@ -219,6 +235,29 @@ func validateHosts(hosts string) (error) {
 
 	return nil
 
+}
+
+func getAlternateHostnames() ([]string, error) {
+
+
+	file, err := os.Open(getAlternateHostnamesLocation())
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var hostnames []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			hostnames = append(hostnames, line)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return hostnames, nil
 }
 
 // Reads /etc/main_interfaces and returns a slice of interface names
@@ -439,6 +478,14 @@ func getHostnameInfo() (hostnames []string, err error) {
 		return []string{"hostnamefallback.fallbackfakedomain"}, err
 	}
 	hostnames = append(hostnames, hostname)
+
+	altHostNames, err := getAlternateHostnames()
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		hostnames = append(hostnames, altHostNames...)
+	}
+
 
 
 	if strings.ToLower(runtime.GOOS) == "windows" {
