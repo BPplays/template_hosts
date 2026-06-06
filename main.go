@@ -453,7 +453,7 @@ func getHostnameInfo() (hostnames []string, err error) {
 
 	hostnames = getHostnameSplits(hostnames)
 
-	sliceutil.Dedupe(hostnames)
+	hostnames = sliceutil.Dedupe(hostnames)
 
 	return hostnames, nil
 }
