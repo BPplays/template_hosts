@@ -37,6 +37,7 @@ type HostData struct {
 	IPv6IPs       []string
 	IPv4IPs       []string
 	Hostnames     []string
+	Domains       []string
 
 	OS string
 }
@@ -388,6 +389,32 @@ func getIPaddresses(validateFunc func(*netip.Addr) bool) ([]string, error) {
 	return ipAddresses, nil
 }
 
+func joinHostnameDomain(hostname, domain string) string {
+	hostname = strings.TrimSuffix(hostname, ".")
+	domain = strings.TrimPrefix(domain, ".")
+
+	if hostname == "" {
+		return domain
+	}
+	if domain == "" {
+		return hostname
+	}
+
+	return hostname + "." + domain
+}
+
+func addDomainToHostnames(hostnames []string, domains []string) ([]string) {
+	var output []string
+	output = append(output, hostnames...)
+
+	for _, hostname := range hostnames {
+		for _, domain := range domains {
+			output = append(output, joinHostnameDomain(hostname, domain))
+		}
+	}
+	return output
+}
+
 // splits a hostname by . and outputs a slice of combined ones except the original
 func getHostnameSplits(s string) (hostnames []string) {
 	parts := strings.Split(s, ".")
@@ -403,6 +430,7 @@ func getHostnameSplits(s string) (hostnames []string) {
 }
 
 func getHostnameInfo() (hostnames []string, err error) {
+
 	hostname, err := os.Hostname()
 	if err != nil {
 		return []string{"hostnamefallback.fallbackfakedomain"}, err
@@ -410,6 +438,16 @@ func getHostnameInfo() (hostnames []string, err error) {
 	hostnames = append(hostnames, hostname)
 
 	hostnames = append(hostnames, getHostnameSplits(hostname)...)
+
+	if strings.ToLower(runtime.GOOS) == "windows" {
+		domains, err := getTCPIPDomain()
+		if err != nil {
+			fmt.Println()
+		}
+		if len(domains) > 0 {
+			hostnames = addDomainToHostnames(hostnames, domains)
+		}
+	}
 
 	return hostnames, nil
 }

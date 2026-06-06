@@ -11,3 +11,15 @@ func serviceAction(_ *string) error {
 func srvMain() error {
 	return errors.New("services are only supported on Windows")
 }
+
+
+// ====================
+// ===              ===
+// === domain stuff ===
+// ===              ===
+// ====================
+
+
+func getTCPIPDomain() ([]string, error) {
+	return []string{}, errors.New("services are only supported on Windows")
+}

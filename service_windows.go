@@ -10,6 +10,9 @@ import (
 	"github.com/kardianos/service"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
+
+	"github.com/projectdiscovery/utils/slice"
 )
 
 
@@ -218,4 +221,42 @@ func srvMain() error {
 	return serviceAction(&s)
 
 }
+
+
+
+// ====================
+// ===              ===
+// === domain stuff ===
+// ===              ===
+// ====================
+
+
+func getTCPIPDomain() ([]string, error) {
+	// Computer\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters
+	key, err := registry.OpenKey(
+		registry.LOCAL_MACHINE,
+		`SYSTEM\CurrentControlSet\Services\Tcpip\Parameters`,
+		registry.QUERY_VALUE,
+	)
+	if err != nil {
+		return []string{}, err
+	}
+	defer key.Close()
+
+	domains := []string{}
+
+	for _, name := range []string{"Domain", "NV Domain", "DhcpDomain"} {
+		if v, _, err := key.GetStringValue(name); err == nil && v != "" {
+			domains = append(domains, v)
+		}
+	}
+
+	if len(domains) > 0 {
+		domains = sliceutil.Dedupe(domains)
+		return domains, nil
+	}
+
+	return []string{}, fmt.Errorf("no domain value found in Tcpip\\Parameters")
+}
+
 
