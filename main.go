@@ -21,6 +21,7 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	hostsfile "github.com/kevinburke/hostsfile/lib"
+	sliceutil "github.com/projectdiscovery/utils/slice"
 	"github.com/vishvananda/netlink"
 )
 
@@ -403,8 +404,7 @@ func joinHostnameDomain(hostname, domain string) string {
 	return hostname + "." + domain
 }
 
-func addDomainToHostnames(hostnames []string, domains []string) ([]string) {
-	var output []string
+func addDomainToHostnames(hostnames []string, domains []string) (output []string) {
 	output = append(output, hostnames...)
 
 	for _, hostname := range hostnames {
@@ -416,17 +416,20 @@ func addDomainToHostnames(hostnames []string, domains []string) ([]string) {
 }
 
 // splits a hostname by . and outputs a slice of combined ones except the original
-func getHostnameSplits(s string) (hostnames []string) {
-	parts := strings.Split(s, ".")
+func getHostnameSplits(hostnames []string) (output []string) {
+	output = append(output, hostnames...)
+	for _, hostname := range hostnames {
+		parts := strings.Split(hostname, ".")
 
-	for i := range len(parts)-1 {
-		tmp := []string{}
-		for i2 := range i+1 {
-			tmp = append(tmp, parts[i2])
+		for i := range len(parts)-1 {
+			tmp := []string{}
+			for i2 := range i+1 {
+				tmp = append(tmp, parts[i2])
+			}
+			output = append(output, strings.Join(tmp, "."))
 		}
-		hostnames = append(hostnames, strings.Join(tmp, "."))
 	}
-	return
+	return output
 }
 
 func getHostnameInfo() (hostnames []string, err error) {
@@ -437,7 +440,6 @@ func getHostnameInfo() (hostnames []string, err error) {
 	}
 	hostnames = append(hostnames, hostname)
 
-	hostnames = append(hostnames, getHostnameSplits(hostname)...)
 
 	if strings.ToLower(runtime.GOOS) == "windows" {
 		domains, err := getTCPIPDomain()
@@ -448,6 +450,10 @@ func getHostnameInfo() (hostnames []string, err error) {
 			hostnames = addDomainToHostnames(hostnames, domains)
 		}
 	}
+
+	hostnames = getHostnameSplits(hostnames)
+
+	sliceutil.Dedupe(hostnames)
 
 	return hostnames, nil
 }

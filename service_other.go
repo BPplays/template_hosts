@@ -21,5 +21,5 @@ func srvMain() error {
 
 
 func getTCPIPDomain() ([]string, error) {
-	return []string{}, errors.New("services are only supported on Windows")
+	return []string{}, errors.New("only supported on Windows")
 }
