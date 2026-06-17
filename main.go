@@ -238,8 +238,6 @@ func validateHosts(hosts string) (error) {
 }
 
 func getAlternateHostnames() ([]string, error) {
-
-
 	file, err := os.Open(getAlternateHostnamesLocation())
 	if err != nil {
 		return nil, err
@@ -447,7 +445,9 @@ func addDomainToHostnames(hostnames []string, domains []string) (output []string
 	output = append(output, hostnames...)
 
 	for _, hostname := range hostnames {
+		if hostname == "" { continue }
 		for _, domain := range domains {
+			if domain == "" { continue }
 			output = append(output, joinHostnameDomain(hostname, domain))
 		}
 	}
@@ -501,6 +501,8 @@ func getHostnameInfo() (hostnames []string, err error) {
 	hostnames = getHostnameSplits(hostnames)
 
 	hostnames = sliceutil.Dedupe(hostnames)
+
+	slices.Sort(hostnames)
 
 	return hostnames, nil
 }
